@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>DS Emulator</title>
+</head>
+<body>
+
+<h3>Nintendo DS Emulator</h3>
+
+<!-- ROM loader -->
+<input type="file" id="romInput" accept=".nds">
+
+<br><br>
+
+<!-- Save system -->
+<button onclick="downloadSave()">Download Save State</button>
+<input type="file" id="loadSave" accept=".state" onchange="uploadSave(event)">
+
+<hr>
+
+<div id="game"></div>
+
+<script>
+let ejsLoaded = false;
+
+// Load ROM locally
+document.getElementById("romInput").addEventListener("change", function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function() {
+
+        // reset emulator screen
+        document.getElementById("game").innerHTML = "";
+
+        window.EJS_player = "#game";
+        window.EJS_core = "nds";
+        window.EJS_gameUrl = reader.result;
+        window.EJS_pathtodata = "emulatorjs/data/";
+
+        // prevent duplicate script loading
+        if (ejsLoaded) {
+            const old = document.querySelector("script[data-ejs]");
+            if (old) old.remove();
+        }
+
+        const script = document.createElement("script");
+        script.src = "emulatorjs/data/loader.js";
+        script.setAttribute("data-ejs", "1");
+        document.body.appendChild(script);
+
+        ejsLoaded = true;
+    };
+
+    reader.readAsDataURL(file);
+});
+
+// Save state download
+function downloadSave() {
+    if (typeof EJS_saveState === "function") {
+        EJS_saveState();
+    } else {
+        alert("Load a game first");
+    }
+}
+
+// Save state upload
+function uploadSave(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = function() {
+        if (typeof EJS_loadState === "function") {
+            EJS_loadState(reader.result);
+        }
+    };
+
+    reader.readAsArrayBuffer(file);
+}
+</script>
+
+</body>
+</html>
