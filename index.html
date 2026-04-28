@@ -3,84 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <title>DS Emulator</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: black;
+      color: white;
+      font-family: sans-serif;
+    }
+
+    #game {
+      width: 100%;
+      height: 100%;
+    }
+
+    #status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 9999;
+      font-size: 14px;
+    }
+  </style>
 </head>
+
 <body>
 
-<h3>Nintendo DS Emulator</h3>
-
-<input type="file" id="romInput" accept=".nds">
-
-<br><br>
-
-<button onclick="downloadSave()">Download Save State</button>
-<input type="file" onchange="uploadSave(event)">
-
-<hr>
-
+<div id="status">Loading...</div>
 <div id="game"></div>
 
 <script>
-let scriptLoaded = false;
+console.log("Booting EmulatorJS...");
 
-// Load ROM
-document.getElementById("romInput").addEventListener("change", function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+window.EJS_player = "#game";
+window.EJS_core = "nds";
+window.EJS_pathtodata = "emulatorjs/data/";
 
-    const reader = new FileReader();
+// ⚠️ MUST EXIST OR IT WILL HANG
+window.EJS_gameUrl = "emulatorjs/data/game.nds";
 
-    reader.onload = function() {
+window.addEventListener("load", () => {
+  const script = document.createElement("script");
+  script.src = "emulatorjs/data/loader.js";
 
-        // reset screen
-        document.getElementById("game").innerHTML = "";
+  script.onload = () => {
+    document.getElementById("status").innerText = "Emulator loaded";
+  };
 
-        // IMPORTANT: consistent path setup
-        window.EJS_player = "#game";
-        window.EJS_core = "nds";
-        window.EJS_gameUrl = reader.result;
-        window.EJS_pathtodata = "emulatorjs/data/";
+  script.onerror = () => {
+    document.getElementById("status").innerText = "ERROR: loader.js failed";
+    console.error("loader.js failed to load");
+  };
 
-        // prevent duplicate scripts
-        if (scriptLoaded) {
-            const old = document.querySelector("script[data-ejs]");
-            if (old) old.remove();
-        }
-
-        const script = document.createElement("script");
-        script.src = "emulatorjs/data/loader.js";   // ✅ FIXED PATH
-        script.setAttribute("data-ejs", "1");
-        document.body.appendChild(script);
-
-        scriptLoaded = true;
-    };
-
-    reader.readAsDataURL(file);
+  document.body.appendChild(script);
 });
-
-// Save state download
-function downloadSave() {
-    if (typeof EJS_saveState === "function") {
-        EJS_saveState();
-    } else {
-        alert("Load a game first");
-    }
-}
-
-// Save state upload
-function uploadSave(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-
-    reader.onload = function() {
-        if (typeof EJS_loadState === "function") {
-            EJS_loadState(reader.result);
-        }
-    };
-
-    reader.readAsArrayBuffer(file);
-}
 </script>
 
 </body>
