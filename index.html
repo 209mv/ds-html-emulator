@@ -9,8 +9,7 @@
       margin: 0;
       height: 100%;
       background: black;
-      color: white;
-      font-family: sans-serif;
+      overflow: hidden;
     }
 
     #game {
@@ -18,45 +17,57 @@
       height: 100%;
     }
 
-    #status {
+    #ui {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 9999;
-      font-size: 14px;
+      color: white;
+      font-family: sans-serif;
     }
   </style>
 </head>
 
 <body>
 
-<div id="status">Loading...</div>
+<div id="ui">
+  <input type="file" id="romInput" accept=".nds">
+</div>
+
 <div id="game"></div>
 
 <script>
-console.log("Booting EmulatorJS...");
+let loaded = false;
 
-window.EJS_player = "#game";
-window.EJS_core = "nds";
-window.EJS_pathtodata = "emulatorjs/data/";
+document.getElementById("romInput").addEventListener("change", function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
 
-// ⚠️ MUST EXIST OR IT WILL HANG
-window.EJS_gameUrl = "emulatorjs/data/game.nds";
+  const reader = new FileReader();
 
-window.addEventListener("load", () => {
-  const script = document.createElement("script");
-  script.src = "emulatorjs/data/loader.js";
+  reader.onload = function() {
 
-  script.onload = () => {
-    document.getElementById("status").innerText = "Emulator loaded";
+    document.getElementById("game").innerHTML = "";
+
+    window.EJS_player = "#game";
+    window.EJS_core = "nds";
+    window.EJS_pathtodata = "emulatorjs/data/";
+    window.EJS_gameUrl = reader.result; // local file only
+
+    if (loaded) {
+      const old = document.querySelector("script[data-ejs]");
+      if (old) old.remove();
+    }
+
+    const script = document.createElement("script");
+    script.src = "emulatorjs/data/loader.js";
+    script.setAttribute("data-ejs", "1");
+    document.body.appendChild(script);
+
+    loaded = true;
   };
 
-  script.onerror = () => {
-    document.getElementById("status").innerText = "ERROR: loader.js failed";
-    console.error("loader.js failed to load");
-  };
-
-  document.body.appendChild(script);
+  reader.readAsDataURL(file);
 });
 </script>
 
