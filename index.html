@@ -38,7 +38,7 @@ document.getElementById("romInput").addEventListener("change", function(e) {
         window.EJS_player = "#game";
         window.EJS_core = "nds";
         window.EJS_gameUrl = reader.result;
-        window.EJS_pathtodata = "data/";
+        window.EJS_pathtodata = "emulatorjs/data/";
 
         // prevent duplicate scripts
         if (scriptLoaded) {
@@ -47,7 +47,7 @@ document.getElementById("romInput").addEventListener("change", function(e) {
         }
 
         const script = document.createElement("script");
-        script.src = "data/loader.js";   // ✅ FIXED PATH
+        script.src = "emulatorjs/data/loader.js";   // ✅ FIXED PATH
         script.setAttribute("data-ejs", "1");
         document.body.appendChild(script);
 
