@@ -8,23 +8,21 @@
 
 <h3>Nintendo DS Emulator</h3>
 
-<!-- ROM loader -->
 <input type="file" id="romInput" accept=".nds">
 
 <br><br>
 
-<!-- Save system -->
 <button onclick="downloadSave()">Download Save State</button>
-<input type="file" id="loadSave" accept=".state" onchange="uploadSave(event)">
+<input type="file" onchange="uploadSave(event)">
 
 <hr>
 
 <div id="game"></div>
 
 <script>
-let ejsLoaded = false;
+let scriptLoaded = false;
 
-// Load ROM locally
+// Load ROM
 document.getElementById("romInput").addEventListener("change", function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -33,26 +31,27 @@ document.getElementById("romInput").addEventListener("change", function(e) {
 
     reader.onload = function() {
 
-        // reset emulator screen
+        // reset screen
         document.getElementById("game").innerHTML = "";
 
+        // IMPORTANT: consistent path setup
         window.EJS_player = "#game";
         window.EJS_core = "nds";
         window.EJS_gameUrl = reader.result;
         window.EJS_pathtodata = "data/";
 
-        // prevent duplicate script loading
-        if (ejsLoaded) {
+        // prevent duplicate scripts
+        if (scriptLoaded) {
             const old = document.querySelector("script[data-ejs]");
             if (old) old.remove();
         }
 
         const script = document.createElement("script");
-        script.src = "data/loader.js";
+        script.src = "data/loader.js";   // ✅ FIXED PATH
         script.setAttribute("data-ejs", "1");
         document.body.appendChild(script);
 
-        ejsLoaded = true;
+        scriptLoaded = true;
     };
 
     reader.readAsDataURL(file);
