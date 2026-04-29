@@ -68,11 +68,17 @@ localStorage.setItem("username", username);
 
 const userRef = ref(db, "users/" + username);
 
-set(userRef, {
-  name: username,
-  role: "user",
-  banned: false,
-  muted: false
+import { get, set } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+get(userRef).then((snap) => {
+  if (!snap.exists()) {
+    set(userRef, {
+      name: username,
+      role: "user",
+      banned: false,
+      muted: false
+    });
+  }
 });
 
 /* STATE */
