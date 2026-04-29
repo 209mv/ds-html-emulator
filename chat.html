@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>chat</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: black;
+  color: white;
+}
+
+#chatbox {
+  height: 80vh;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.msg {
+  padding: 6px;
+  border-bottom: 1px solid #333;
+}
+</style>
+</head>
+
+<body>
+
+<h2 style="text-align:center;">chat</h2>
+
+<div id="chatbox"></div>
+
+<input id="msgInput" placeholder="message..." style="width:80%; padding:10px;">
+<button onclick="sendMsg()">send</button>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+/* 🔧 YOUR CONFIG (you already have this) */
+const firebaseConfig = {
+  apiKey: "AIzaSyAWAr4IjoChfFSojPdXMM9s1tCvF5kT3Mo",
+  authDomain: "mauricio-chat.firebaseapp.com",
+  databaseURL: "https://mauricio-chat-default-rtdb.firebaseio.com",
+  projectId: "mauricio-chat",
+  storageBucket: "mauricio-chat.firebasestorage.app",
+  messagingSenderId: "845502642014",
+  appId: "1:845502642014:web:9d0df697c8d85c65ac41cf"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const messagesRef = ref(db, "messages");
+
+/* RECEIVE */
+onValue(messagesRef, (snapshot) => {
+  const box = document.getElementById("chatbox");
+  box.innerHTML = "";
+
+  snapshot.forEach(child => {
+    const msg = child.val();
+
+    const div = document.createElement("div");
+    div.className = "msg";
+    div.textContent = msg.text;
+
+    box.appendChild(div);
+  });
+
+  box.scrollTop = box.scrollHeight;
+});
+
+/* SEND */
+window.sendMsg = function () {
+  const input = document.getElementById("msgInput");
+  if (!input.value.trim()) return;
+
+  push(messagesRef, {
+    text: input.value,
+    time: Date.now()
+  });
+
+  input.value = "";
+};
+</script>
+
+</body>
+</html>
