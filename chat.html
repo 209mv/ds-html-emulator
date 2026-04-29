@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>chat</title>
+<link rel="stylesheet" href="chat.css">
+</head>
+
+<body>
+
+<canvas id="space"></canvas>
+
+<div class="app">
+
+  <div class="sidebar">
+    <h3>online</h3>
+    <div id="users"></div>
+  </div>
+
+  <div class="main">
+    <div id="chatbox"></div>
+
+    <div class="input-area">
+      <input id="msgInput" placeholder="message or image URL...">
+      <button onclick="sendMsg()">send</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel" style="display:none;">
+  <b>admin panel</b><br>
+  <button onclick="setRole()">role</button>
+  <button onclick="muteUser()">mute</button>
+  <button onclick="unmuteUser()">unmute</button>
+  <button onclick="banUser()">ban</button>
+  <button onclick="unbanUser()">unban</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import {
+  getDatabase,
+  ref,
+  push,
+  onValue,
+  set,
+  get,
+  query,
+  limitToLast
+} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+/* ================= FIREBASE ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyAWAr4IjoChfFSojPdXMM9tCvF5kT3Mo",
+  authDomain: "mauricio-chat.firebaseapp.com",
+  databaseURL: "https://mauricio-chat-default-rtdb.firebaseio.com",
+  projectId: "mauricio-chat",
+  storageBucket: "mauricio-chat.firebasestorage.app",
+  messagingSenderId: "845502642014",
+  appId: "1:845502642014:web:9d0df697c8d85c65ac41cf"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const messagesRef = ref(db, "messages");
+const usersRef = ref(db, "users");
+
+/* ================= USER ================= */
+let username = localStorage.getItem("username") || prompt("username");
+localStorage.setItem("username", username);
+
+const userRef = ref(db, "users/" + username);
+
+let role = "user";
+let banned = false;
+let muted = false;
+
+/* ================= STARTUP (STABLE ORDER) ================= */
+async function start() {
+
+  const snap = await get(userRef);
+
+  if (!snap.exists()) {
+    await set(userRef, {
+      name: username,
+      role: "user",
+      banned: false,
+      muted: false
+    });
+  }
+
+  onValue(userRef, (d) => {
+    const data = d.val();
+    if (!data) return;
+
+    role = data.role || "user";
+    banned = data.banned;
+    muted = data.muted;
+
+    if (banned) {
+      document.body.innerHTML = "<h1>You are banned</h1>";
+    }
+
+    if (role === "admin") {
+      document.getElementById("adminPanel").style.display = "block";
+    }
+  });
+
+  /* messages */
+  onValue(query(messagesRef, limitToLast(50)), (snap) => {
+    const box = document.getElementById("chatbox");
+    box.innerHTML = "";
+
+    snap.forEach(c => {
+      const m = c.val();
+      const id = c.key;
+
+      const div = document.createElement("div");
+      div.className = "msg";
+
+      let text = m.text;
+      const isImage = m.type === "image";
+
+      /* ================= MENTIONS ================= */
+      const mentions = m.mentions || [];
+
+      if (mentions.includes(username)) {
+        notify(`You were mentioned by ${m.name}`);
+      }
+
+      if (!isImage) {
+        text = highlightMentions(text);
+      }
+
+      /* ================= REACTIONS DISPLAY ================= */
+      const reactions = m.reactions || {};
+      let reactionHTML = "";
+
+      for (const emoji in reactions) {
+        const count = Object.keys(reactions[emoji] || {}).length;
+        reactionHTML += `<span class="react">${emoji} ${count}</span>`;
+      }
+
+      div.innerHTML = `
+        <b>${m.name}:</b><br>
+        ${isImage ? `<img src="${m.text}" class="chat-img">` : text}
+        <div>${reactionHTML}</div>
+
+        <button onclick="react('${id}','👍')">👍</button>
+        <button onclick="react('${id}','😂')">😂</button>
+        <button onclick="react('${id}','🔥')">🔥</button>
+      `;
+
+      box.appendChild(div);
+    });
+  });
+
+  /* users */
+  onValue(usersRef, (snap) => {
+    const box = document.getElementById("users");
+    box.innerHTML = "";
+
+    snap.forEach(u => {
+      const d = u.val();
+
+      let tag = "";
+      if (d.role === "admin") tag = "👑";
+      if (d.role === "mod") tag = "🛡";
+      if (d.banned) tag = "🚫";
+      if (d.muted) tag = "🔇";
+
+      box.innerHTML += `<div>${tag} ${u.key}</div>`;
+    });
+  });
+}
+
+/* ================= SEND MESSAGE ================= */
+window.sendMsg = function () {
+  const input = document.getElementById("msgInput");
+  const text = input.value.trim();
+
+  if (!text || banned || muted) return;
+
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+
+  const mentions = (text.match(/@\w+/g) || []).map(v => v.replace("@",""));
+
+  push(messagesRef, {
+    text,
+    name: username,
+    time: Date.now(),
+    type: isImage ? "image" : "text",
+    mentions,
+    reactions: {}
+  });
+
+  input.value = "";
+};
+
+/* ================= REACTIONS ================= */
+window.react = function (msgId, emoji) {
+  const path = ref(db, `messages/${msgId}/reactions/${emoji}/${username}`);
+  set(path, true);
+};
+
+/* ================= MENTIONS ================= */
+function highlightMentions(text) {
+  return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+}
+
+/* ================= NOTIFICATIONS ================= */
+function notify(msg) {
+  if (Notification.permission === "granted") {
+    new Notification(msg);
+  }
+}
+
+if (Notification.permission !== "granted") {
+  Notification.requestPermission();
+}
+
+/* ================= ADMIN ================= */
+window.setRole = function () {
+  const t = prompt("user:");
+  const r = prompt("role:");
+  set(ref(db, "users/" + t + "/role"), r);
+};
+
+window.muteUser = function () {
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/muted"), true);
+};
+
+window.unmuteUser = function () {
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/muted"), false);
+};
+
+window.banUser = function () {
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/banned"), true);
+};
+
+window.unbanUser = function () {
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/banned"), false);
+};
+
+/* ENTER */
+document.getElementById("msgInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendMsg();
+});
+
+start();
+</script>
+
+<script src="space.js"></script>
+</body>
+</html>
