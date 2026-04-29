@@ -3,65 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <title>chat</title>
-
-<style>
-body {
-  margin: 0;
-  font-family: Arial;
-  background: black;
-  color: white;
-}
-
-#chatbox {
-  height: 80vh;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.msg {
-  padding: 6px;
-  border-bottom: 1px solid #333;
-}
-
-input {
-  width: 75%;
-  padding: 10px;
-  margin: 10px;
-  border: none;
-  border-radius: 6px;
-}
-
-button {
-  padding: 10px;
-  border: none;
-  border-radius: 6px;
-  background: #444;
-  color: white;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #666;
-}
-</style>
+<link rel="stylesheet" href="chat.css">
 </head>
 
 <body>
 
-<h2 style="text-align:center;">chat</h2>
+<canvas id="space"></canvas>
 
-<div id="chatbox"></div>
+<div class="app">
 
-<input id="msgInput" placeholder="message...">
-<button onclick="sendMsg()">send</button>
+  <div class="sidebar">
+    <h3>online</h3>
+    <div id="users"></div>
+  </div>
+
+  <div class="main">
+    <div id="chatbox"></div>
+
+    <div class="input-area">
+      <input id="msgInput" placeholder="message...">
+      <button onclick="sendMsg()">send</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- admin panel -->
+<div id="adminPanel" style="display:none;">
+  <b>admin panel</b><br>
+  <button onclick="clearChat()">clear chat</button>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-import { getDatabase, ref, push, onValue, query, limitToLast } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+import {
+  getDatabase, ref, push, onValue,
+  set, query, limitToLast
+} from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
-/* 🔹 Firebase config */
+/* firebase */
 const firebaseConfig = {
-  apiKey: "AIzaSyAWAr4IjoChfFSojPdXMM9s1tCvF5kT3Mo",
+  apiKey: "AIzaSyAWAr4IjoChfFSojPdXMM9tCvF5kT3Mo",
   authDomain: "mauricio-chat.firebaseapp.com",
   databaseURL: "https://mauricio-chat-default-rtdb.firebaseio.com",
   projectId: "mauricio-chat",
@@ -74,71 +56,103 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 const messagesRef = ref(db, "messages");
-const chatQuery = query(messagesRef, limitToLast(50));
+const usersRef = ref(db, "users");
 
-/* 🔹 USERNAME */
-let username = localStorage.getItem("username");
-if (!username) {
-  username = prompt("enter username") || "anon";
-  localStorage.setItem("username", username);
+/* identity */
+let username = localStorage.getItem("username") || prompt("username");
+localStorage.setItem("username", username);
+
+/* profile */
+const pfp = localStorage.getItem("pfp") ||
+  prompt("profile picture URL (optional)") || "";
+
+localStorage.setItem("pfp", pfp);
+
+/* role system */
+let role = "user";
+
+const userRef = ref(db, "users/" + username);
+
+set(userRef, {
+  name: username,
+  pfp: pfp,
+  role: "user"
+});
+
+/* admin login */
+let isAdmin = false;
+const key = prompt("admin key (optional)");
+
+if (key === "1234") {
+  isAdmin = true;
+  document.getElementById("adminPanel").style.display = "block";
 }
 
-/* 🔹 COLOR */
-const colors = ["#ff4a4a", "#4aff88", "#4aa3ff", "#ffb84a", "#d24aff"];
-let color = localStorage.getItem("color");
+/* send message */
+window.sendMsg = function () {
+  const input = document.getElementById("msgInput");
+  if (!input.value.trim()) return;
 
-if (!color) {
-  color = colors[Math.floor(Math.random() * colors.length)];
-  localStorage.setItem("color", color);
-}
+  push(messagesRef, {
+    text: input.value,
+    name: username,
+    pfp: pfp,
+    time: Date.now()
+  });
 
-/* 🔹 ANTI-SPAM */
-let lastSend = 0;
-const COOLDOWN = 1500;
+  input.value = "";
+};
 
-/* 🔹 RECEIVE */
-onValue(chatQuery, (snapshot) => {
+/* receive messages */
+onValue(query(messagesRef, limitToLast(50)), (snap) => {
   const box = document.getElementById("chatbox");
   box.innerHTML = "";
 
-  snapshot.forEach(child => {
-    const msg = child.val();
+  snap.forEach(c => {
+    const msg = c.val();
 
     const div = document.createElement("div");
     div.className = "msg";
 
     div.innerHTML = `
-      <span style="color:${msg.color}; font-weight:bold;">
-        ${msg.name}:
-      </span>
-      ${msg.text}
+      <img src="${msg.pfp || ''}"
+           style="width:22px;height:22px;border-radius:50%;vertical-align:middle;margin-right:5px;">
+
+      <b>${msg.name}:</b> ${msg.text}
     `;
 
     box.appendChild(div);
   });
-
-  box.scrollTop = box.scrollHeight;
 });
 
-/* 🔹 SEND */
-window.sendMsg = function () {
-  const now = Date.now();
-  if (now - lastSend < COOLDOWN) return;
+/* users */
+onValue(usersRef, (snap) => {
+  const box = document.getElementById("users");
+  box.innerHTML = "";
 
-  const input = document.getElementById("msgInput");
-  if (!input.value.trim()) return;
+  snap.forEach(u => {
+    const data = u.val();
+    let badge = "";
 
-  push(messagesRef, {
-    text: input.value.slice(0, 200),
-    name: username,
-    color: color,
-    time: now
+    if (data.role === "admin") badge = "👑";
+    if (data.role === "mod") badge = "🛡";
+
+    box.innerHTML += `<div>${badge} ${data.name}</div>`;
   });
+});
 
-  input.value = "";
-  lastSend = now;
+/* enter key */
+document.getElementById("msgInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendMsg();
+});
+
+/* admin */
+window.clearChat = function () {
+  if (!isAdmin) return;
+  set(messagesRef, null);
 };
 </script>
 
+<script src="space.js"></script>
 </body>
 </html>
