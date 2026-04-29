@@ -23,6 +23,7 @@ body {
   background: rgba(20,20,20,0.6);
   backdrop-filter: blur(10px);
   padding: 10px;
+  overflow-y: auto;
 }
 
 .main {
@@ -38,13 +39,13 @@ body {
 }
 
 .msg {
-  padding: 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  padding: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   animation: pop 0.2s ease;
 }
 
 @keyframes pop {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -63,11 +64,18 @@ input {
 }
 
 button {
-  padding: 10px;
+  padding: 8px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: rgba(255,255,255,0.1);
   color: white;
+  cursor: pointer;
+}
+
+.chat-img {
+  max-width: 250px;
+  border-radius: 10px;
+  margin-top: 5px;
 }
 
 #adminPanel {
