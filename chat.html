@@ -28,10 +28,15 @@
 
 </div>
 
-<!-- admin panel -->
+<!-- ADMIN PANEL -->
 <div id="adminPanel" style="display:none;">
   <b>admin panel</b><br>
-  <button onclick="clearChat()">clear chat</button>
+
+  <button onclick="setRole()">set role</button>
+  <button onclick="muteUser()">mute</button>
+  <button onclick="unmuteUser()">unmute</button>
+  <button onclick="banUser()">ban</button>
+  <button onclick="unbanUser()">unban</button>
 </div>
 
 <script type="module">
@@ -41,7 +46,7 @@ import {
   set, query, limitToLast
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
-/* firebase */
+/* FIREBASE */
 const firebaseConfig = {
   apiKey: "AIzaSyAWAr4IjoChfFSojPdXMM9tCvF5kT3Mo",
   authDomain: "mauricio-chat.firebaseapp.com",
@@ -58,99 +63,125 @@ const db = getDatabase(app);
 const messagesRef = ref(db, "messages");
 const usersRef = ref(db, "users");
 
-/* identity */
+/* USER */
 let username = localStorage.getItem("username") || prompt("username");
 localStorage.setItem("username", username);
 
-/* profile */
-const pfp = localStorage.getItem("pfp") ||
-  prompt("profile picture URL (optional)") || "";
-
-localStorage.setItem("pfp", pfp);
-
-/* role system */
-let role = "user";
-
 const userRef = ref(db, "users/" + username);
 
+/* DEFAULT PROFILE */
 set(userRef, {
   name: username,
-  pfp: pfp,
-  role: "user"
+  role: "user",
+  banned: false,
+  muted: false
 });
 
-/* admin login */
-let isAdmin = false;
-const key = prompt("admin key (optional)");
+/* STATE */
+let role = "user";
+let banned = false;
+let muted = false;
 
-if (key === "1234") {
-  isAdmin = true;
-  document.getElementById("adminPanel").style.display = "block";
-}
+/* ROLE WATCH */
+onValue(userRef, (snap) => {
+  const data = snap.val();
+  if (!data) return;
 
-/* send message */
+  role = data.role || "user";
+  banned = data.banned || false;
+  muted = data.muted || false;
+
+  if (banned) {
+    document.body.innerHTML = "<h1>You are banned.</h1>";
+  }
+
+  if (role === "admin") {
+    document.getElementById("adminPanel").style.display = "block";
+  }
+});
+
+/* SEND MESSAGE */
 window.sendMsg = function () {
   const input = document.getElementById("msgInput");
-  if (!input.value.trim()) return;
+  const text = input.value.trim();
+
+  if (!text || banned || muted) return;
 
   push(messagesRef, {
-    text: input.value,
+    text,
     name: username,
-    pfp: pfp,
     time: Date.now()
   });
 
   input.value = "";
 };
 
-/* receive messages */
+/* RECEIVE MESSAGES */
 onValue(query(messagesRef, limitToLast(50)), (snap) => {
   const box = document.getElementById("chatbox");
   box.innerHTML = "";
 
   snap.forEach(c => {
-    const msg = c.val();
+    const m = c.val();
 
     const div = document.createElement("div");
     div.className = "msg";
 
-    div.innerHTML = `
-      <img src="${msg.pfp || ''}"
-           style="width:22px;height:22px;border-radius:50%;vertical-align:middle;margin-right:5px;">
-
-      <b>${msg.name}:</b> ${msg.text}
-    `;
-
+    div.innerHTML = `<b>${m.name}:</b> ${m.text}`;
     box.appendChild(div);
   });
 });
 
-/* users */
+/* USERS */
 onValue(usersRef, (snap) => {
   const box = document.getElementById("users");
   box.innerHTML = "";
 
   snap.forEach(u => {
-    const data = u.val();
-    let badge = "";
+    const d = u.val();
 
-    if (data.role === "admin") badge = "👑";
-    if (data.role === "mod") badge = "🛡";
+    let tag = "";
+    if (d.role === "admin") tag = "👑";
+    if (d.role === "mod") tag = "🛡";
+    if (d.banned) tag = "🚫";
+    if (d.muted) tag = "🔇";
 
-    box.innerHTML += `<div>${badge} ${data.name}</div>`;
+    box.innerHTML += `<div>${tag} ${u.key}</div>`;
   });
 });
 
-/* enter key */
+/* ADMIN ACTIONS */
+window.setRole = function () {
+  const target = prompt("username:");
+  const role = prompt("role (admin/mod/user):");
+
+  set(ref(db, "users/" + target + "/role"), role);
+};
+
+window.muteUser = function () {
+  const target = prompt("username:");
+  set(ref(db, "users/" + target + "/muted"), true);
+};
+
+window.unmuteUser = function () {
+  const target = prompt("username:");
+  set(ref(db, "users/" + target + "/muted"), false);
+};
+
+window.banUser = function () {
+  const target = prompt("username:");
+  set(ref(db, "users/" + target + "/banned"), true);
+};
+
+window.unbanUser = function () {
+  const target = prompt("username:");
+  set(ref(db, "users/" + target + "/banned"), false);
+};
+
+/* ENTER KEY */
 document.getElementById("msgInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendMsg();
 });
-
-/* admin */
-window.clearChat = function () {
-  if (!isAdmin) return;
-  set(messagesRef, null);
-};
 </script>
 
 <script src="space.js"></script>
