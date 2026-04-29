@@ -21,7 +21,7 @@
     <div id="chatbox"></div>
 
     <div class="input-area">
-      <input id="msgInput" placeholder="message...">
+      <input id="msgInput" placeholder="message or image URL...">
       <button onclick="sendMsg()">send</button>
     </div>
   </div>
@@ -31,8 +31,7 @@
 <!-- ADMIN PANEL -->
 <div id="adminPanel" style="display:none;">
   <b>admin panel</b><br>
-
-  <button onclick="setRole()">set role</button>
+  <button onclick="setRole()">role</button>
   <button onclick="muteUser()">mute</button>
   <button onclick="unmuteUser()">unmute</button>
   <button onclick="banUser()">ban</button>
@@ -69,7 +68,6 @@ localStorage.setItem("username", username);
 
 const userRef = ref(db, "users/" + username);
 
-/* DEFAULT PROFILE */
 set(userRef, {
   name: username,
   role: "user",
@@ -82,17 +80,17 @@ let role = "user";
 let banned = false;
 let muted = false;
 
-/* ROLE WATCH */
+/* WATCH USER */
 onValue(userRef, (snap) => {
-  const data = snap.val();
-  if (!data) return;
+  const d = snap.val();
+  if (!d) return;
 
-  role = data.role || "user";
-  banned = data.banned || false;
-  muted = data.muted || false;
+  role = d.role;
+  banned = d.banned;
+  muted = d.muted;
 
   if (banned) {
-    document.body.innerHTML = "<h1>You are banned.</h1>";
+    document.body.innerHTML = "<h1>You are banned</h1>";
   }
 
   if (role === "admin") {
@@ -107,14 +105,43 @@ window.sendMsg = function () {
 
   if (!text || banned || muted) return;
 
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
+  const mentions = text.match(/@\w+/g) || [];
+
   push(messagesRef, {
     text,
     name: username,
-    time: Date.now()
+    time: Date.now(),
+    type: isImage ? "image" : "text",
+    replyTo: window.replyTarget || null,
+    mentions
   });
 
+  window.replyTarget = null;
   input.value = "";
 };
+
+/* REACTIONS */
+window.react = function (id, emoji) {
+  const path = ref(db, `messages/${id}/reactions/${emoji}/${username}`);
+  set(path, true);
+};
+
+/* REPLY */
+window.replyTo = function (id) {
+  window.replyTarget = id;
+  alert("reply selected");
+};
+
+/* NOTIFICATIONS */
+function notify(msg) {
+  if (Notification.permission === "granted") {
+    new Notification(msg);
+  }
+}
+if (Notification.permission !== "granted") {
+  Notification.requestPermission();
+}
 
 /* RECEIVE MESSAGES */
 onValue(query(messagesRef, limitToLast(50)), (snap) => {
@@ -123,11 +150,32 @@ onValue(query(messagesRef, limitToLast(50)), (snap) => {
 
   snap.forEach(c => {
     const m = c.val();
+    const id = c.key;
 
     const div = document.createElement("div");
     div.className = "msg";
 
-    div.innerHTML = `<b>${m.name}:</b> ${m.text}`;
+    let content = "";
+
+    if (m.type === "image") {
+      content = `<img src="${m.text}" class="chat-img">`;
+    } else {
+      content = m.text;
+    }
+
+    if (m.mentions?.includes(username)) {
+      notify(`You were mentioned by ${m.name}`);
+    }
+
+    div.innerHTML = `
+      <b>${m.name}:</b><br>
+      ${content}<br>
+
+      <button onclick="react('${id}','👍')">👍</button>
+      <button onclick="react('${id}','😂')">😂</button>
+      <button onclick="replyTo('${id}')">↩</button>
+    `;
+
     box.appendChild(div);
   });
 });
@@ -150,35 +198,34 @@ onValue(usersRef, (snap) => {
   });
 });
 
-/* ADMIN ACTIONS */
+/* ADMIN */
 window.setRole = function () {
-  const target = prompt("username:");
-  const role = prompt("role (admin/mod/user):");
-
-  set(ref(db, "users/" + target + "/role"), role);
+  const t = prompt("user:");
+  const r = prompt("role:");
+  set(ref(db, "users/" + t + "/role"), r);
 };
 
 window.muteUser = function () {
-  const target = prompt("username:");
-  set(ref(db, "users/" + target + "/muted"), true);
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/muted"), true);
 };
 
 window.unmuteUser = function () {
-  const target = prompt("username:");
-  set(ref(db, "users/" + target + "/muted"), false);
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/muted"), false);
 };
 
 window.banUser = function () {
-  const target = prompt("username:");
-  set(ref(db, "users/" + target + "/banned"), true);
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/banned"), true);
 };
 
 window.unbanUser = function () {
-  const target = prompt("username:");
-  set(ref(db, "users/" + target + "/banned"), false);
+  const t = prompt("user:");
+  set(ref(db, "users/" + t + "/banned"), false);
 };
 
-/* ENTER KEY */
+/* ENTER */
 document.getElementById("msgInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendMsg();
 });
