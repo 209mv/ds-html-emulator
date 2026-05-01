@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>chat</title>
-<link rel="stylesheet" href="chat.css">
 
 <style>
 body {
@@ -11,7 +10,6 @@ body {
   font-family: Arial;
   background: #0d0d0f;
   color: white;
-  overflow: hidden;
 }
 
 .app {
@@ -19,22 +17,19 @@ body {
   height: 100vh;
 }
 
-/* SIDEBAR */
 .sidebar {
   width: 220px;
-  background: rgba(20,20,20,0.9);
+  background: #111;
   padding: 10px;
   overflow-y: auto;
 }
 
-/* MAIN */
 .main {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
 
-/* CHAT */
 #chatbox {
   flex: 1;
   overflow-y: auto;
@@ -42,17 +37,16 @@ body {
 }
 
 .msg {
-  background: rgba(40,40,40,0.85);
-  margin: 6px;
+  margin: 6px 0;
   padding: 10px;
+  background: #1e1e22;
   border-radius: 10px;
 }
 
-/* INPUT */
 .input-area {
   display: flex;
   padding: 10px;
-  background: rgba(0,0,0,0.6);
+  background: #111;
 }
 
 .input-area input {
@@ -60,22 +54,10 @@ body {
   padding: 10px;
 }
 
-/* REPLY BAR */
 #replyBar {
   background: #222;
   padding: 5px;
   font-size: 12px;
-}
-
-/* ADMIN PANEL */
-#adminPanel {
-  position: fixed;
-  right: 10px;
-  top: 10px;
-  background: #111;
-  padding: 10px;
-  display: none;
-  border: 1px solid #333;
 }
 </style>
 </head>
@@ -85,7 +67,7 @@ body {
 <div class="app">
 
   <div class="sidebar">
-    <h3>online list ig</h3>
+    <h3>Online</h3>
     <div id="users"></div>
   </div>
 
@@ -107,15 +89,6 @@ body {
 
 </div>
 
-<!-- ADMIN -->
-<div id="adminPanel">
-  <b>Admin Panel</b><br>
-  <button onclick="banUser()">ban</button>
-  <button onclick="unbanUser()">unban</button>
-  <button onclick="muteUser()">mute</button>
-  <button onclick="setRole()">role</button>
-</div>
-
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
@@ -124,12 +97,12 @@ import {
   query, limitToLast
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
-/* FIREBASE */
+/* FIREBASE CONFIG */
 const firebaseConfig = {
-  apiKey: "YOUR_KEY",
+  apiKey: "YOUR_API_KEY",
   authDomain: "mauricio-chat.firebaseapp.com",
   databaseURL: "https://mauricio-chat-default-rtdb.firebaseio.com",
-  projectId: "mauricio-chat",
+  projectId: "mauricio-chat"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -138,46 +111,59 @@ const db = getDatabase(app);
 const messagesRef = ref(db, "messages");
 const usersRef = ref(db, "users");
 
-/* IDENTITY */
+/* =========================
+   USER PROFILE SYSTEM
+========================= */
+
 let userId = localStorage.getItem("userId");
+
 if (!userId) {
   userId = crypto.randomUUID();
   localStorage.setItem("userId", userId);
 }
 
-const username = "User_" + userId.slice(0,5);
-const color = `hsl(${Math.random()*360},70%,60%)`;
+let username = localStorage.getItem("username");
+let pfp = localStorage.getItem("pfp");
 
-/* REGISTER USER */
+if (!username) {
+  username = prompt("Enter your username:");
+  if (!username) username = "User_" + userId.slice(0,5);
+  localStorage.setItem("username", username);
+}
+
+if (!pfp) {
+  pfp = `https://api.dicebear.com/7.x/initials/svg?seed=${username}`;
+  localStorage.setItem("pfp", pfp);
+}
+
+/* REGISTER USER (NO OVERWRITE) */
 const userRef = ref(db, "users/" + userId);
 
-set(userRef, {
-  name: username,
-  color,
-  role: "user",
-  muted: false,
-  banned: false
+get(userRef).then(snap => {
+  if (!snap.exists()) {
+    set(userRef, {
+      name: username,
+      pfp,
+      role: "user",
+      muted: false,
+      banned: false
+    });
+  }
 });
 
 /* STATE */
 let replyTarget = null;
 let isMuted = false;
-let isAdmin = false;
 
 /* WATCH USER */
-onValue(userRef, (snap) => {
+onValue(userRef, snap => {
   const d = snap.val();
   if (!d) return;
 
   isMuted = d.muted;
-  isAdmin = d.role === "admin";
 
   if (d.banned) {
     document.body.innerHTML = "<h1>You are banned</h1>";
-  }
-
-  if (isAdmin) {
-    document.getElementById("adminPanel").style.display = "block";
   }
 });
 
@@ -185,21 +171,22 @@ onValue(userRef, (snap) => {
 window.sendMsg = function () {
   const input = document.getElementById("msgInput");
   const text = input.value.trim();
+
   if (!text || isMuted) return;
 
   push(messagesRef, {
     text,
     userId,
     name: username,
-    color,
+    pfp,
     time: Date.now(),
     replyTo: replyTarget,
     reactions: {}
   });
 
+  input.value = "";
   replyTarget = null;
   document.getElementById("replyBar").style.display = "none";
-  input.value = "";
 };
 
 /* REPLY */
@@ -222,8 +209,8 @@ window.react = function(id, emoji) {
   });
 };
 
-/* RENDER */
-onValue(query(messagesRef, limitToLast(50)), (snap) => {
+/* RENDER MESSAGES */
+onValue(query(messagesRef, limitToLast(50)), snap => {
   const box = document.getElementById("chatbox");
   box.innerHTML = "";
 
@@ -235,67 +222,50 @@ onValue(query(messagesRef, limitToLast(50)), (snap) => {
     div.className = "msg";
 
     div.innerHTML = `
-      <b style="color:${m.color}">${m.name}</b><br>
-      ${m.text}<br>
-
-      <button onclick="react('${id}','👍')">👍</button>
-      <button onclick="react('${id}','😂')">😂</button>
-      <button onclick="replyToMsg('${id}','${m.text}')">↩</button>
+      <div style="display:flex; gap:10px;">
+        <img src="${m.pfp}" style="width:36px;height:36px;border-radius:50%;">
+        <div>
+          <b>${m.name}</b><br>
+          ${m.text}
+          <div style="margin-top:5px;">
+            <button onclick="react('${id}','👍')">👍</button>
+            <button onclick="react('${id}','😂')">😂</button>
+            <button onclick="replyToMsg('${id}','${m.text}')">↩</button>
+          </div>
+        </div>
+      </div>
     `;
 
     box.appendChild(div);
   });
 });
 
-/* USERS */
-onValue(usersRef, (snap) => {
+/* USERS LIST */
+onValue(usersRef, snap => {
   const box = document.getElementById("users");
   box.innerHTML = "";
 
   snap.forEach(u => {
     const d = u.val();
+
     const div = document.createElement("div");
-    div.textContent = d.name;
-    div.style.color = d.color;
+    div.style.display = "flex";
+    div.style.alignItems = "center";
+    div.style.gap = "8px";
+
+    div.innerHTML = `
+      <img src="${d.pfp}" style="width:24px;height:24px;border-radius:50%;">
+      ${d.name}
+    `;
+
     box.appendChild(div);
   });
 });
 
-/* ADMIN */
-window.banUser = function() {
-  const id = prompt("userId:");
-  set(ref(db,"users/"+id+"/banned"), true);
-};
-
-window.unbanUser = function() {
-  const id = prompt("userId:");
-  set(ref(db,"users/"+id+"/banned"), false);
-};
-
-window.muteUser = function() {
-  const id = prompt("userId:");
-  set(ref(db,"users/"+id+"/muted"), true);
-};
-
-window.setRole = function() {
-  const id = prompt("userId:");
-  const role = prompt("role:");
-  set(ref(db,"users/"+id+"/role"), role);
-};
-
-/* ENTER SEND */
-document.getElementById("msgInput").addEventListener("keydown",(e)=>{
+/* ENTER KEY */
+document.getElementById("msgInput").addEventListener("keydown", e => {
   if (e.key === "Enter") sendMsg();
 });
-
-/* NOTIFICATIONS */
-Notification.requestPermission();
-
-function notify(msg){
-  if(Notification.permission==="granted"){
-    new Notification(msg);
-  }
-}
 
 </script>
 
