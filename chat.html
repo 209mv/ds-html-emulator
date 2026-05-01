@@ -4,62 +4,132 @@
 <meta charset="UTF-8">
 <title>chat</title>
 <link rel="stylesheet" href="chat.css">
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #0d0d0f;
+  color: white;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  background: rgba(20,20,20,0.9);
+  padding: 10px;
+  overflow-y: auto;
+}
+
+/* MAIN */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* CHAT */
+#chatbox {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.msg {
+  background: rgba(40,40,40,0.85);
+  margin: 6px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+/* INPUT */
+.input-area {
+  display: flex;
+  padding: 10px;
+  background: rgba(0,0,0,0.6);
+}
+
+.input-area input {
+  flex: 1;
+  padding: 10px;
+}
+
+/* REPLY BAR */
+#replyBar {
+  background: #222;
+  padding: 5px;
+  font-size: 12px;
+}
+
+/* ADMIN PANEL */
+#adminPanel {
+  position: fixed;
+  right: 10px;
+  top: 10px;
+  background: #111;
+  padding: 10px;
+  display: none;
+  border: 1px solid #333;
+}
+</style>
 </head>
 
 <body>
 
-<canvas id="space"></canvas>
-
 <div class="app">
 
   <div class="sidebar">
-    <h3>online</h3>
+    <h3>online list ig</h3>
     <div id="users"></div>
   </div>
 
   <div class="main">
+
     <div id="chatbox"></div>
 
+    <div id="replyBar" style="display:none;">
+      Replying to: <span id="replyText"></span>
+      <button onclick="clearReply()">x</button>
+    </div>
+
     <div class="input-area">
-      <input id="msgInput" placeholder="message or image URL...">
+      <input id="msgInput" placeholder="message...">
       <button onclick="sendMsg()">send</button>
     </div>
+
   </div>
 
 </div>
 
-<!-- ADMIN PANEL -->
-<div id="adminPanel" style="display:none;">
-  <b>admin panel</b><br>
-  <button onclick="setRole()">role</button>
-  <button onclick="muteUser()">mute</button>
-  <button onclick="unmuteUser()">unmute</button>
+<!-- ADMIN -->
+<div id="adminPanel">
+  <b>Admin Panel</b><br>
   <button onclick="banUser()">ban</button>
   <button onclick="unbanUser()">unban</button>
+  <button onclick="muteUser()">mute</button>
+  <button onclick="setRole()">role</button>
 </div>
 
 <script type="module">
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
 import {
-  getDatabase,
-  ref,
-  push,
-  onValue,
-  set,
-  get,
-  query,
-  limitToLast
+  getDatabase, ref, push, onValue, set, get,
+  query, limitToLast
 } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
-/* ================= FIREBASE ================= */
+/* FIREBASE */
 const firebaseConfig = {
-  apiKey: "AIzaSyAWAr4IjoChfFSojPdXMM9tCvF5kT3Mo",
+  apiKey: "YOUR_KEY",
   authDomain: "mauricio-chat.firebaseapp.com",
   databaseURL: "https://mauricio-chat-default-rtdb.firebaseio.com",
   projectId: "mauricio-chat",
-  storageBucket: "mauricio-chat.firebasestorage.app",
-  messagingSenderId: "845502642014",
-  appId: "1:845502642014:web:9d0df697c8d85c65ac41cf"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -68,195 +138,166 @@ const db = getDatabase(app);
 const messagesRef = ref(db, "messages");
 const usersRef = ref(db, "users");
 
-/* ================= USER ================= */
-let username = localStorage.getItem("username") || prompt("username");
-localStorage.setItem("username", username);
-
-const userRef = ref(db, "users/" + username);
-
-let role = "user";
-let banned = false;
-let muted = false;
-
-/* ================= STARTUP (STABLE ORDER) ================= */
-async function start() {
-
-  const snap = await get(userRef);
-
-  if (!snap.exists()) {
-    await set(userRef, {
-      name: username,
-      role: "user",
-      banned: false,
-      muted: false
-    });
-  }
-
-  onValue(userRef, (d) => {
-    const data = d.val();
-    if (!data) return;
-
-    role = data.role || "user";
-    banned = data.banned;
-    muted = data.muted;
-
-    if (banned) {
-      document.body.innerHTML = "<h1>You are banned</h1>";
-    }
-
-    if (role === "admin") {
-      document.getElementById("adminPanel").style.display = "block";
-    }
-  });
-
-  /* messages */
-  onValue(query(messagesRef, limitToLast(50)), (snap) => {
-    const box = document.getElementById("chatbox");
-    box.innerHTML = "";
-
-    snap.forEach(c => {
-      const m = c.val();
-      const id = c.key;
-
-      const div = document.createElement("div");
-      div.className = "msg";
-
-      let text = m.text;
-      const isImage = m.type === "image";
-
-      /* ================= MENTIONS ================= */
-      const mentions = m.mentions || [];
-
-      if (mentions.includes(username)) {
-        notify(`You were mentioned by ${m.name}`);
-      }
-
-      if (!isImage) {
-        text = highlightMentions(text);
-      }
-
-      /* ================= REACTIONS DISPLAY ================= */
-      const reactions = m.reactions || {};
-      let reactionHTML = "";
-
-      for (const emoji in reactions) {
-        const count = Object.keys(reactions[emoji] || {}).length;
-        reactionHTML += `<span class="react">${emoji} ${count}</span>`;
-      }
-
-      div.innerHTML = `
-        <b>${m.name}:</b><br>
-        ${isImage ? `<img src="${m.text}" class="chat-img">` : text}
-        <div>${reactionHTML}</div>
-
-        <button onclick="react('${id}','👍')">👍</button>
-        <button onclick="react('${id}','😂')">😂</button>
-        <button onclick="react('${id}','🔥')">🔥</button>
-      `;
-
-      box.appendChild(div);
-    });
-  });
-
-  /* users */
-  onValue(usersRef, (snap) => {
-    const box = document.getElementById("users");
-    box.innerHTML = "";
-
-    snap.forEach(u => {
-      const d = u.val();
-
-      let tag = "";
-      if (d.role === "admin") tag = "👑";
-      if (d.role === "mod") tag = "🛡";
-      if (d.banned) tag = "🚫";
-      if (d.muted) tag = "🔇";
-
-      box.innerHTML += `<div>${tag} ${u.key}</div>`;
-    });
-  });
+/* IDENTITY */
+let userId = localStorage.getItem("userId");
+if (!userId) {
+  userId = crypto.randomUUID();
+  localStorage.setItem("userId", userId);
 }
 
-/* ================= SEND MESSAGE ================= */
+const username = "User_" + userId.slice(0,5);
+const color = `hsl(${Math.random()*360},70%,60%)`;
+
+/* REGISTER USER */
+const userRef = ref(db, "users/" + userId);
+
+set(userRef, {
+  name: username,
+  color,
+  role: "user",
+  muted: false,
+  banned: false
+});
+
+/* STATE */
+let replyTarget = null;
+let isMuted = false;
+let isAdmin = false;
+
+/* WATCH USER */
+onValue(userRef, (snap) => {
+  const d = snap.val();
+  if (!d) return;
+
+  isMuted = d.muted;
+  isAdmin = d.role === "admin";
+
+  if (d.banned) {
+    document.body.innerHTML = "<h1>You are banned</h1>";
+  }
+
+  if (isAdmin) {
+    document.getElementById("adminPanel").style.display = "block";
+  }
+});
+
+/* SEND MESSAGE */
 window.sendMsg = function () {
   const input = document.getElementById("msgInput");
   const text = input.value.trim();
-
-  if (!text || banned || muted) return;
-
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(text);
-
-  const mentions = (text.match(/@\w+/g) || []).map(v => v.replace("@",""));
+  if (!text || isMuted) return;
 
   push(messagesRef, {
     text,
+    userId,
     name: username,
+    color,
     time: Date.now(),
-    type: isImage ? "image" : "text",
-    mentions,
+    replyTo: replyTarget,
     reactions: {}
   });
 
+  replyTarget = null;
+  document.getElementById("replyBar").style.display = "none";
   input.value = "";
 };
 
-/* ================= REACTIONS ================= */
-window.react = function (msgId, emoji) {
-  const path = ref(db, `messages/${msgId}/reactions/${emoji}/${username}`);
-  set(path, true);
+/* REPLY */
+window.replyToMsg = function(id, text) {
+  replyTarget = id;
+  document.getElementById("replyBar").style.display = "block";
+  document.getElementById("replyText").textContent = text;
 };
 
-/* ================= MENTIONS ================= */
-function highlightMentions(text) {
-  return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
-}
+window.clearReply = function() {
+  replyTarget = null;
+  document.getElementById("replyBar").style.display = "none";
+};
 
-/* ================= NOTIFICATIONS ================= */
-function notify(msg) {
-  if (Notification.permission === "granted") {
+/* REACTIONS */
+window.react = function(id, emoji) {
+  const path = ref(db, `messages/${id}/reactions/${emoji}/${userId}`);
+  get(path).then(snap => {
+    set(path, snap.exists() ? null : true);
+  });
+};
+
+/* RENDER */
+onValue(query(messagesRef, limitToLast(50)), (snap) => {
+  const box = document.getElementById("chatbox");
+  box.innerHTML = "";
+
+  snap.forEach(c => {
+    const m = c.val();
+    const id = c.key;
+
+    const div = document.createElement("div");
+    div.className = "msg";
+
+    div.innerHTML = `
+      <b style="color:${m.color}">${m.name}</b><br>
+      ${m.text}<br>
+
+      <button onclick="react('${id}','👍')">👍</button>
+      <button onclick="react('${id}','😂')">😂</button>
+      <button onclick="replyToMsg('${id}','${m.text}')">↩</button>
+    `;
+
+    box.appendChild(div);
+  });
+});
+
+/* USERS */
+onValue(usersRef, (snap) => {
+  const box = document.getElementById("users");
+  box.innerHTML = "";
+
+  snap.forEach(u => {
+    const d = u.val();
+    const div = document.createElement("div");
+    div.textContent = d.name;
+    div.style.color = d.color;
+    box.appendChild(div);
+  });
+});
+
+/* ADMIN */
+window.banUser = function() {
+  const id = prompt("userId:");
+  set(ref(db,"users/"+id+"/banned"), true);
+};
+
+window.unbanUser = function() {
+  const id = prompt("userId:");
+  set(ref(db,"users/"+id+"/banned"), false);
+};
+
+window.muteUser = function() {
+  const id = prompt("userId:");
+  set(ref(db,"users/"+id+"/muted"), true);
+};
+
+window.setRole = function() {
+  const id = prompt("userId:");
+  const role = prompt("role:");
+  set(ref(db,"users/"+id+"/role"), role);
+};
+
+/* ENTER SEND */
+document.getElementById("msgInput").addEventListener("keydown",(e)=>{
+  if (e.key === "Enter") sendMsg();
+});
+
+/* NOTIFICATIONS */
+Notification.requestPermission();
+
+function notify(msg){
+  if(Notification.permission==="granted"){
     new Notification(msg);
   }
 }
 
-if (Notification.permission !== "granted") {
-  Notification.requestPermission();
-}
-
-/* ================= ADMIN ================= */
-window.setRole = function () {
-  const t = prompt("user:");
-  const r = prompt("role:");
-  set(ref(db, "users/" + t + "/role"), r);
-};
-
-window.muteUser = function () {
-  const t = prompt("user:");
-  set(ref(db, "users/" + t + "/muted"), true);
-};
-
-window.unmuteUser = function () {
-  const t = prompt("user:");
-  set(ref(db, "users/" + t + "/muted"), false);
-};
-
-window.banUser = function () {
-  const t = prompt("user:");
-  set(ref(db, "users/" + t + "/banned"), true);
-};
-
-window.unbanUser = function () {
-  const t = prompt("user:");
-  set(ref(db, "users/" + t + "/banned"), false);
-};
-
-/* ENTER */
-document.getElementById("msgInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") sendMsg();
-});
-
-start();
 </script>
 
-<script src="space.js"></script>
 </body>
 </html>
